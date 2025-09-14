@@ -101,19 +101,23 @@ def iterative_resolve(domain, rdtype):
 
 def pretty_print(domain, rdtype, answers, elapsed_ms):
     print("QUESTION SECTION:")
-    print(f"{domain}. IN {dns.rdatatype.to_text(rdtype)}")
+    print(f"{domain}.")
     print()
+
     print("ANSWER SECTION:")
     if not answers:
         print("(no answer)")
     else:
-        for rrset in answers:
-            for r in rrset:
-                print(f"{rrset.name} {rrset.ttl} IN {dns.rdatatype.to_text(rrset.rdtype)} {r}")
+        rrset = answers[0]
+        r = rrset[0]
+        print(f"{rrset.name}")
+        print(f"{rrset.ttl} IN {dns.rdatatype.to_text(rrset.rdtype)} {r}")
     print()
+
     print(f"Query time: {int(elapsed_ms)} msec")
     print(f"WHEN: {datetime.now().strftime('%a %b %d %H:%M:%S %Y')}")
     print()
+
 
 def resolve_with_timing(domain, rdtype, result_holder):
     start = time.time()
