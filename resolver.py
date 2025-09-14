@@ -73,33 +73,41 @@ def iterative_resolve(domain, rdtype):
         if not resp:
             raise RuntimeError("No response from any server")
 
+        # --- Handle answers ---
         if resp.answer:
-            answers = []
             cname_target = None
             for rrset in resp.answer:
-                if rrset.rdtype == rdtype:
-                    answers.append(rrset)
+                if rrset.rdtype == rdtype:  # got final answer (A or AAAA)
+                    return [rrset]  # return only the first RRset
                 elif rrset.rdtype == dns.rdatatype.CNAME:
                     cname_target = str(rrset[0].target)
 
-            if answers:
-                return answers
-            elif cname_target:
+            if cname_target:
                 cname_chain += 1
                 if cname_chain > MAX_CNAME_CHAIN:
                     raise RuntimeError("CNAME chain too long")
+                # restart resolution from the new target
                 qname = cname_target
                 current_servers = list(ROOT_SERVERS)
                 continue
 
+        # --- Follow delegation (authority + additional) ---
         glue_ips = extract_glue_ips(resp)
         if glue_ips:
             current_servers = glue_ips
             continue
 
+        # if no glue, try resolving NS hostnames
+        ns_ips = extract_ns_ips(resp, dns.rdatatype.A) + extract_ns_ips(resp, dns.rdatatype.AAAA)
+        if ns_ips:
+            current_servers = ns_ips
+            continue
+
         raise RuntimeError("No usable answer or delegation found")
 
-def pretty_print(domain, rdtype, answers, elapsed_ms):
+
+
+def pretty_print(domain, answers, elapsed_ms):
     print("QUESTION SECTION:")
     print(f"{domain}.")
     print()
@@ -118,15 +126,37 @@ def pretty_print(domain, rdtype, answers, elapsed_ms):
     print(f"WHEN: {datetime.now().strftime('%a %b %d %H:%M:%S %Y')}")
     print()
 
-
 def resolve_with_timing(domain, rdtype, result_holder):
     start = time.time()
     try:
         answers = iterative_resolve(domain, rdtype)
+        if not answers:
+            return
         elapsed = (time.time() - start) * 1000.0
-        result_holder["result"] = (rdtype, answers, elapsed)
-    except Exception as e:
-        result_holder["error"] = f"{dns.rdatatype.to_text(rdtype)} lookup failed: {e}"
+        # only record success
+        if "result" not in result_holder:
+            result_holder["result"] = (rdtype, answers, elapsed)
+    except Exception:
+        # don’t set an error here, just let main decide
+        pass
+
+def extract_ns_ips(response, rdtype):
+    """Resolve NS hostnames from authority section into IPs."""
+    ips = []
+    for rrset in response.authority:
+        if rrset.rdtype == dns.rdatatype.NS:
+            for r in rrset:
+                ns_name = str(r.target)
+                try:
+                    ns_ans = iterative_resolve(ns_name, rdtype)  # recursive call
+                    if ns_ans:
+                        for rr in ns_ans[0]:
+                            if hasattr(rr, "address"):
+                                ips.append(rr.address)
+                except Exception:
+                    continue
+    return ips
+
 
 def main():
     if len(sys.argv) != 2:
@@ -148,13 +178,13 @@ def main():
     while True:
         if "result" in result:
             rdtype, answers, elapsed = result["result"]
-            pretty_print(domain, rdtype, answers, elapsed)
+            pretty_print(domain, answers, elapsed)
             return
-        # If both threads are done but only errors exist, print one error
         if all(not t.is_alive() for t in threads):
-            print(result.get("error", "Lookup failed"))
+            print("Lookup failed")
             return
         time.sleep(0.05)
+
 
 if __name__ == "__main__":
     main()
