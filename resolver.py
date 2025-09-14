@@ -63,6 +63,23 @@ def extract_glue_ips(response):
                 ips.append(r.address)
     return ips
 
+def extract_ns_ips(response, rdtype):
+    """Resolve NS hostnames from authority section into IPs."""
+    ips = []
+    for rrset in response.authority:
+        if rrset.rdtype == dns.rdatatype.NS:
+            for r in rrset:
+                ns_name = str(r.target)
+                try:
+                    ns_ans = iterative_resolve(ns_name, rdtype)  # recursive call
+                    if ns_ans:
+                        for rr in ns_ans[0]:
+                            if hasattr(rr, "address"):
+                                ips.append(rr.address)
+                except Exception:
+                    continue
+    return ips
+
 def iterative_resolve(domain, rdtype):
     current_servers = list(ROOT_SERVERS)
     cname_chain = 0
@@ -139,23 +156,6 @@ def resolve_with_timing(domain, rdtype, result_holder):
     except Exception:
         # don’t set an error here, just let main decide
         pass
-
-def extract_ns_ips(response, rdtype):
-    """Resolve NS hostnames from authority section into IPs."""
-    ips = []
-    for rrset in response.authority:
-        if rrset.rdtype == dns.rdatatype.NS:
-            for r in rrset:
-                ns_name = str(r.target)
-                try:
-                    ns_ans = iterative_resolve(ns_name, rdtype)  # recursive call
-                    if ns_ans:
-                        for rr in ns_ans[0]:
-                            if hasattr(rr, "address"):
-                                ips.append(rr.address)
-                except Exception:
-                    continue
-    return ips
 
 
 def main():
