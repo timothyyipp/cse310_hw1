@@ -159,11 +159,11 @@ def resolve_with_timing(domain, rdtype, result_holder):
 
 
 def main():
-    if len(sys.argv) != 2:
-        print("Usage: python resolver.py <domain>")
+    # Ask for domain interactively
+    domain = input("Enter a domain name to resolve: ").strip().rstrip('.')
+    if not domain:
+        print("No domain entered. Exiting.")
         sys.exit(2)
-
-    domain = sys.argv[1].rstrip('.')
 
     result = {}
 
@@ -184,6 +184,7 @@ def main():
             print("Lookup failed")
             return
         time.sleep(0.05)
+
 
 
 if __name__ == "__main__":
