@@ -1,3 +1,13 @@
+
+# Requires dnspython: pip install dnspython
+# Usage: python3 resolver.py
+# Then enter a domain name when prompted.
+# Example: python3 resolver.py
+#   Enter a domain name to resolve: example.com
+# A simple iterative DNS resolver using dnspython.
+# It queries root servers, follows delegations, and handles CNAMEs.
+
+
 import sys
 import time
 import threading
