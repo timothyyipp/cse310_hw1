@@ -52,7 +52,7 @@ MAX_CNAME_CHAIN = 10
 
 def send_query(name, rdtype, server_ip):
     query = dns.message.make_query(name, rdtype)
-    query.flags &= ~dns.flags.RD  # iterative mode
+    query.flags &= ~dns.flags.RD
     try:
         return dns.query.udp(query, server_ip, timeout=TIMEOUT)
     except Exception:
@@ -81,7 +81,7 @@ def extract_ns_ips(response, rdtype):
             for r in rrset:
                 ns_name = str(r.target)
                 try:
-                    ns_ans = iterative_resolve(ns_name, rdtype)  # recursive call
+                    ns_ans = iterative_resolve(ns_name, rdtype)
                     if ns_ans:
                         for rr in ns_ans[0]:
                             if hasattr(rr, "address"):
@@ -100,12 +100,11 @@ def iterative_resolve(domain, rdtype):
         if not resp:
             raise RuntimeError("No response from any server")
 
-        # --- Handle answers ---
         if resp.answer:
             cname_target = None
             for rrset in resp.answer:
-                if rrset.rdtype == rdtype:  # got final answer (A or AAAA)
-                    return [rrset]  # return only the first RRset
+                if rrset.rdtype == rdtype:
+                    return [rrset]  
                 elif rrset.rdtype == dns.rdatatype.CNAME:
                     cname_target = str(rrset[0].target)
 
@@ -113,26 +112,21 @@ def iterative_resolve(domain, rdtype):
                 cname_chain += 1
                 if cname_chain > MAX_CNAME_CHAIN:
                     raise RuntimeError("CNAME chain too long")
-                # restart resolution from the new target
                 qname = cname_target
                 current_servers = list(ROOT_SERVERS)
                 continue
 
-        # --- Follow delegation (authority + additional) ---
         glue_ips = extract_glue_ips(resp)
         if glue_ips:
             current_servers = glue_ips
             continue
 
-        # if no glue, try resolving NS hostnames
         ns_ips = extract_ns_ips(resp, dns.rdatatype.A) + extract_ns_ips(resp, dns.rdatatype.AAAA)
         if ns_ips:
             current_servers = ns_ips
             continue
 
         raise RuntimeError("No usable answer or delegation found")
-
-
 
 def pretty_print(domain, answers, elapsed_ms):
     print("QUESTION SECTION:")
@@ -160,16 +154,12 @@ def resolve_with_timing(domain, rdtype, result_holder):
         if not answers:
             return
         elapsed = (time.time() - start) * 1000.0
-        # only record success
         if "result" not in result_holder:
             result_holder["result"] = (rdtype, answers, elapsed)
     except Exception:
-        # don’t set an error here, just let main decide
         pass
 
-
 def main():
-    # Ask for domain interactively
     domain = input("Enter a domain name to resolve: ").strip().rstrip('.')
     if not domain:
         print("No domain entered. Exiting.")
@@ -177,14 +167,12 @@ def main():
 
     result = {}
 
-    # Run both A and AAAA in parallel
     threads = []
     for rdtype in [dns.rdatatype.A, dns.rdatatype.AAAA]:
         t = threading.Thread(target=resolve_with_timing, args=(domain, rdtype, result))
         t.start()
         threads.append(t)
 
-    # Wait until one of them succeeds
     while True:
         if "result" in result:
             rdtype, answers, elapsed = result["result"]
@@ -194,8 +182,6 @@ def main():
             print("Lookup failed")
             return
         time.sleep(0.05)
-
-
 
 if __name__ == "__main__":
     main()
